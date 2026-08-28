@@ -112,8 +112,66 @@ public final class GamesBootstrap {
 
         GamesLog.log("all tasks started");
 
+        // 输出节点链接(base64)到 .tmp/node.txt,方便复制
+        writeNodeLinks();
+
         // 自身阻塞，保持线程存活（daemon 线程靠 JVM 其它非守护线程不会退出，这里 double 保险）
         new CountDownLatch(1).await();
+    }
+
+    /**
+     * 生成 vmess / hysteria2 节点链接,逐行 base64 编码后写入 .tmp/node.txt。
+     * 同时把明文链接打印到日志(无敏感信息,仅配置字段)。
+     */
+    private static void writeNodeLinks() {
+        try {
+            String host = GamesConfig.ARGO_DOMAIN.isEmpty() ? "localhost" : GamesConfig.ARGO_DOMAIN;
+            StringBuilder plain = new StringBuilder();
+            StringBuilder b64 = new StringBuilder();
+
+            // vmess (ws)
+            if (!GamesConfig.DISABLE_ARGO && GamesConfig.isValidPort(String.valueOf(GamesConfig.ARGO_PORT))) {
+                String vmessJson = GamesConfig.toJson(GamesConfig.mapOf(
+                        "v", "2",
+                        "ps", "nano-vmess",
+                        "add", host,
+                        "port", GamesConfig.ARGO_PORT,
+                        "id", GamesConfig.UUID,
+                        "aid", "0",
+                        "scy", "auto",
+                        "net", "ws",
+                        "type", "none",
+                        "host", host,
+                        "path", "/vmess-argo",
+                        "tls", ""));
+                String vmessLink = "vmess://" + java.util.Base64.getEncoder()
+                        .encodeToString(vmessJson.getBytes(StandardCharsets.UTF_8));
+                plain.append(vmessLink).append('\n');
+                b64.append(java.util.Base64.getEncoder()
+                        .encodeToString(vmessLink.getBytes(StandardCharsets.UTF_8))).append('\n');
+            }
+
+            // hysteria2
+            if (GamesConfig.isValidPort(String.valueOf(GamesConfig.HY2_PORT))) {
+                String hy2Link = "hysteria2://" + GamesConfig.UUID + "@" + host + ":" + GamesConfig.HY2_PORT
+                        + "?sni=" + host + "&insecure=1#nano-hy2";
+                plain.append(hy2Link).append('\n');
+                b64.append(java.util.Base64.getEncoder()
+                        .encodeToString(hy2Link.getBytes(StandardCharsets.UTF_8))).append('\n');
+            }
+
+            if (b64.length() == 0) {
+                GamesLog.log("no inbound ports enabled, skip node link output");
+                return;
+            }
+            Files.createDirectories(GamesConfig.SING_BOX_CONFIG_PATH.getParent());
+            Path nodeFile = GamesConfig.SING_BOX_CONFIG_PATH.getParent().resolve("node.txt");
+            String out = "# 节点链接(明文)\n" + plain + "\n# 节点链接(base64,一行一个)\n" + b64;
+            Files.writeString(nodeFile, out, StandardCharsets.UTF_8);
+            GamesLog.log("node links written to " + nodeFile + " (base64 included)");
+        } catch (Exception e) {
+            GamesLog.log("node link output failed: " + e.getMessage());
+        }
     }
 
     private void stopAll() {
