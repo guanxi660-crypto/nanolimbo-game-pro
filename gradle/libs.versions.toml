@@ -1,0 +1,38 @@
+[versions]
+netty = "4.2.15.Final"
+lombok = "1.18.46"
+shadow = "9.4.2"
+buildconfig = "6.0.10"
+gson = "2.14.0"
+logback = "1.5.34"
+configurate = "4.2.0"
+kyori-adventure = "5.1.1"
+jna = "5.16.0"
+bouncycastle = "1.78.1"
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+buildconfig = { id = "com.github.gmazzo.buildconfig", version.ref = "buildconfig" }
+
+[libraries]
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+configurate-yaml = { module = "org.spongepowered:configurate-yaml", version.ref = "configurate" }
+
+netty-handler = { module = "io.netty:netty-handler", version.ref = "netty" }
+netty-transport-native-epoll = { module = "io.netty:netty-transport-native-epoll", version.ref = "netty" }
+netty-transport-native-io_uring = { module = "io.netty:netty-transport-native-io_uring", version.ref = "netty" }
+netty-transport-native-kqueue = { module = "io.netty:netty-transport-native-kqueue", version.ref = "netty" }
+
+kyori-adventure-api = { module = "net.kyori:adventure-api", version.ref = "kyori-adventure" }
+kyori-adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "kyori-adventure" }
+kyori-adventure-text-serializer-legacy = { module = "net.kyori:adventure-text-serializer-legacy", version.ref = "kyori-adventure" }
+kyori-adventure-text-serializer-plain = { module = "net.kyori:adventure-text-serializer-plain", version.ref = "kyori-adventure" }
+kyori-adventure-text-serializer-minimessage = { module = "net.kyori:adventure-text-minimessage", version.ref = "kyori-adventure" }
+kyori-adventure-text-serializer-json-legacy-impl = { module = "net.kyori:adventure-text-serializer-json-legacy-impl", version.ref = "kyori-adventure" }
+kyori-adventure-nbt = { module = "net.kyori:adventure-nbt", version.ref = "kyori-adventure" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }

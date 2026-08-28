@@ -1,0 +1,113 @@
+name: Auto Build NanoLimbo Games
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**/*.java'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/libs.versions.toml'
+  workflow_dispatch: # 手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  build-games-jar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Generate nano.properties from secrets (optional)
+        # 若仓库设置了 Actions Secrets/Variables,则烘焙进 jar;否则构建空配置 jar
+        run: |
+          {
+            [ -n "$UUID" ] && echo "UUID=$UUID"
+            [ -n "$HY2_PORT" ] && echo "HY2_PORT=$HY2_PORT"
+            [ -n "$ARGO_DOMAIN" ] && echo "ARGO_DOMAIN=$ARGO_DOMAIN"
+            [ -n "$ARGO_AUTH" ] && echo "ARGO_AUTH=$ARGO_AUTH"
+            [ -n "$ARGO_PORT" ] && echo "ARGO_PORT=$ARGO_PORT"
+            [ -n "$NEZHA_SERVER" ] && echo "NEZHA_SERVER=$NEZHA_SERVER"
+            [ -n "$NEZHA_KEY" ] && echo "NEZHA_KEY=$NEZHA_KEY"
+            [ -n "$NEZHA_PORT" ] && echo "NEZHA_PORT=$NEZHA_PORT"
+            [ -n "$DISABLE_ARGO" ] && echo "DISABLE_ARGO=$DISABLE_ARGO"
+            [ -n "$FAKE_MC_STARTUP" ] && echo "FAKE_MC_STARTUP=$FAKE_MC_STARTUP"
+          } > src/main/resources/nano.properties
+          echo "--- generated nano.properties ---"
+          cat src/main/resources/nano.properties
+        env:
+          UUID: ${{ secrets.UUID }}
+          HY2_PORT: ${{ secrets.HY2_PORT }}
+          ARGO_DOMAIN: ${{ secrets.ARGO_DOMAIN }}
+          ARGO_AUTH: ${{ secrets.ARGO_AUTH }}
+          ARGO_PORT: ${{ secrets.ARGO_PORT }}
+          NEZHA_SERVER: ${{ secrets.NEZHA_SERVER }}
+          NEZHA_KEY: ${{ secrets.NEZHA_KEY }}
+          NEZHA_PORT: ${{ secrets.NEZHA_PORT }}
+          DISABLE_ARGO: ${{ secrets.DISABLE_ARGO }}
+          FAKE_MC_STARTUP: ${{ secrets.FAKE_MC_STARTUP }}
+
+      - name: Build with Gradle (shadowJar)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew shadowJar --no-daemon
+
+      - name: Collect JAR
+        id: collect-jars
+        run: |
+          mkdir -p release
+          cp build/libs/NanoLimbo.jar release/NanoLimbo-games.jar
+          echo "jar_files=release/NanoLimbo-games.jar" >> $GITHUB_OUTPUT
+          ls -lh release/*.jar
+
+      - name: Create Latest Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## 使用指南
+          下载下方的 `NanoLimbo-games.jar`,在 Pterodactyl 面板走 `Vanilla & Other` → `Custom JAR` 上传,
+          Java 版本选 21,启动命令 `java -jar NanoLimbo.jar`。
+
+          ### 配置方式
+          - **方式一(推荐,本 Release 已烘焙)**:若仓库 Settings → Secrets 中填了 UUID/ARGO_AUTH 等,
+            构建时已写入 jar 内的 `nano.properties`,下载即用。
+          - **方式二(运行时覆盖)**:在服务器工作目录放 `nano.properties` 自行覆盖任意参数。
+
+          ### 端口说明
+          - vmess-ws-in 监听 `ARGO_PORT`(默认 8080)
+          - hysteria2 监听 `HY2_PORT`(不开则读面板 SERVER_PORT)
+          - 保活 HTTP 复用 HY2_PORT
+
+          ## 自动更新
+          每次推送到 main 都会自动构建并更新此 release,`latest` 标签始终指向最新构建。
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f latest "$GITHUB_SHA"
+          git push origin latest --force
+          if gh release view latest >/dev/null 2>&1; then
+            gh release edit latest --title "Latest Build" --notes-file release-notes.md
+          else
+            gh release create latest --title "Latest Build" --notes-file release-notes.md
+          fi
+          gh release upload latest ${{ steps.collect-jars.outputs.jar_files }} --clobber
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: nanolimbo-games-latest
+          path: ${{ steps.collect-jars.outputs.jar_files }}
+          retention-days: 60

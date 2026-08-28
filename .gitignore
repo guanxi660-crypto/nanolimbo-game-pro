@@ -1,0 +1,7 @@
+.gradle
+.idea
+build
+.tmp
+logs/
+settings.yml
+nano.properties

@@ -1,0 +1,321 @@
+/*
+ * Copyright (C) 2020 Nan1t
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package ua.nanit.limbo.connection;
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.Setter;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.NotNull;
+import ua.nanit.limbo.connection.pipeline.PacketDecoder;
+import ua.nanit.limbo.connection.pipeline.PacketEncoder;
+import ua.nanit.limbo.protocol.Packet;
+import ua.nanit.limbo.protocol.PacketSnapshot;
+import ua.nanit.limbo.protocol.packets.login.PacketLoginDisconnect;
+import ua.nanit.limbo.protocol.packets.play.PacketDisconnect;
+import ua.nanit.limbo.protocol.packets.play.PacketKeepAlive;
+import ua.nanit.limbo.protocol.registry.State;
+import ua.nanit.limbo.protocol.registry.Version;
+import ua.nanit.limbo.server.LimboServer;
+import ua.nanit.limbo.server.Log;
+import ua.nanit.limbo.util.ComponentUtils;
+
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+
+@Getter
+public class ClientConnection extends ChannelInboundHandlerAdapter {
+
+    private final LimboServer server;
+    private final Channel channel;
+    private final GameProfile gameProfile;
+
+    private final PacketDecoder decoder;
+    private final PacketEncoder encoder;
+
+    private State state;
+    private Version clientVersion;
+    private SocketAddress address;
+
+    @Setter
+    private int velocityLoginMessageId = -1;
+
+    public ClientConnection(@NonNull Channel channel,
+                            @NonNull LimboServer server,
+                            @NonNull PacketDecoder decoder,
+                            @NonNull PacketEncoder encoder) {
+        this.server = server;
+        this.channel = channel;
+        this.decoder = decoder;
+        this.encoder = encoder;
+        this.address = channel.remoteAddress();
+        this.gameProfile = new GameProfile();
+    }
+
+    @Nullable
+    public UUID getUuid() {
+        return gameProfile.getUuid();
+    }
+
+    @Nullable
+    public String getUsername() {
+        return gameProfile.getUsername();
+    }
+
+    @Override
+    public void channelInactive(@NotNull ChannelHandlerContext ctx) throws Exception {
+        if (state.equals(State.PLAY) || state.equals(State.CONFIGURATION)) {
+            server.getConnections().removeConnection(this);
+        }
+        super.channelInactive(ctx);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        if (channel.isActive()) {
+            Log.error("Encountered exception", cause);
+
+            ctx.close();
+        }
+    }
+
+    @Override
+    public void channelRead(@NotNull ChannelHandlerContext ctx, @NotNull Object msg) {
+        handlePacket(msg);
+    }
+
+    public void handlePacket(@NonNull Object packet) {
+        if (packet instanceof Packet) {
+            ((Packet) packet).handle(this, server);
+        }
+    }
+
+    public void fireLoginSuccess() {
+        if (server.getConfig().getInfoForwarding().isModern() && velocityLoginMessageId == -1) {
+            disconnect(Component.text("You need to connect with Velocity", NamedTextColor.RED));
+            return;
+        }
+
+        sendPacket(PacketSnapshots.PACKET_LOGIN_SUCCESS);
+
+        server.getConnections().addConnection(this);
+
+        // Preparing for configuration mode
+        if (clientVersion.moreOrEqual(Version.V1_20_2)) {
+            updateEncoderState(State.CONFIGURATION);
+            return;
+        }
+
+        spawnPlayer();
+    }
+
+    public void spawnPlayer() {
+        updateState(State.PLAY);
+
+        Runnable sendPlayPackets = () -> {
+            writePacket(PacketSnapshots.PACKET_JOIN_GAME);
+            writePacket(PacketSnapshots.PACKET_PLAYER_ABILITIES);
+
+            if (clientVersion.less(Version.V1_9)) {
+                writePacket(PacketSnapshots.PACKET_PLAYER_POS_AND_LOOK_LEGACY);
+            } else {
+                writePacket(PacketSnapshots.PACKET_PLAYER_POS_AND_LOOK);
+            }
+
+            if (clientVersion.moreOrEqual(Version.V1_19_3)) {
+                writePacket(PacketSnapshots.PACKET_SPAWN_POSITION);
+            }
+
+            if (server.getConfig().isUsePlayerList() || clientVersion.equals(Version.V1_16_4)) {
+                writePacket(PacketSnapshots.PACKET_PLAYER_INFO);
+            }
+
+            if (clientVersion.moreOrEqual(Version.V1_13)) {
+                writePacket(PacketSnapshots.PACKET_DECLARE_COMMANDS);
+
+                if (PacketSnapshots.PACKET_PLUGIN_MESSAGE != null) {
+                    writePacket(PacketSnapshots.PACKET_PLUGIN_MESSAGE);
+                }
+            }
+
+            if (PacketSnapshots.PACKET_BOSS_BAR != null && clientVersion.moreOrEqual(Version.V1_9)) {
+                writePacket(PacketSnapshots.PACKET_BOSS_BAR);
+            }
+
+            if (PacketSnapshots.PACKET_JOIN_MESSAGE != null) {
+                writePacket(PacketSnapshots.PACKET_JOIN_MESSAGE);
+            }
+
+            if (PacketSnapshots.PACKET_TITLE_TITLE != null && clientVersion.moreOrEqual(Version.V1_8)) {
+                writeTitle();
+            }
+
+            if (PacketSnapshots.PACKET_HEADER_AND_FOOTER != null && clientVersion.moreOrEqual(Version.V1_8)) {
+                writePacket(PacketSnapshots.PACKET_HEADER_AND_FOOTER);
+            }
+
+            if (clientVersion.moreOrEqual(Version.V1_20_3)) {
+                writePacket(PacketSnapshots.PACKET_START_WAITING_CHUNKS);
+
+                writePackets(PacketSnapshots.PACKETS_CHUNKS);
+            }
+
+            sendKeepAlive();
+        };
+
+        if (clientVersion.lessOrEqual(Version.V1_7_6)) {
+            this.channel.eventLoop().schedule(sendPlayPackets, 100, TimeUnit.MILLISECONDS);
+        } else {
+            sendPlayPackets.run();
+        }
+    }
+
+    public void onLoginAcknowledgedReceived() {
+        updateState(State.CONFIGURATION);
+
+        if (PacketSnapshots.PACKET_PLUGIN_MESSAGE != null) {
+            writePacket(PacketSnapshots.PACKET_PLUGIN_MESSAGE);
+        }
+
+        if (clientVersion.moreOrEqual(Version.V1_20_5)) {
+            sendPacket(PacketSnapshots.PACKET_KNOWN_PACKS);
+            return;
+        }
+
+        writePacket(PacketSnapshots.PACKET_REGISTRY_DATA);
+
+        sendPacket(PacketSnapshots.PACKET_FINISH_CONFIGURATION);
+    }
+
+    public void onKnownPacksReceived() {
+        List<PacketSnapshot> registry = PacketSnapshots.getPacketsRegistryData(this.clientVersion);
+        if (registry != null) {
+            writePackets(registry);
+        }
+
+        writePacket(PacketSnapshots.PACKET_UPDATE_TAGS);
+
+        sendPacket(PacketSnapshots.PACKET_FINISH_CONFIGURATION);
+    }
+
+    private void writePackets(@NonNull List<PacketSnapshot> packets) {
+        for (PacketSnapshot packet : packets) {
+            writePacket(packet);
+        }
+    }
+
+    public void disconnect(@NonNull Component reason) {
+        if (!isConnected()) {
+            return;
+        }
+
+        String name = getUsername();
+        Log.debug("%s kicked: %s", (name != null ? name : this.address), ComponentUtils.toPlainString(reason));
+
+        if (!(this.state == State.LOGIN || this.state == State.CONFIGURATION || this.state == State.PLAY)) {
+            this.channel.close();
+            return;
+        }
+
+        Packet packet;
+        if (this.state == State.LOGIN) {
+            PacketLoginDisconnect packetLoginDisconnect = new PacketLoginDisconnect();
+            packetLoginDisconnect.setReason(reason);
+            packet = packetLoginDisconnect;
+        } else {
+            PacketDisconnect packetDisconnect = new PacketDisconnect();
+            packetDisconnect.setReason(reason);
+            packet = packetDisconnect;
+        }
+
+        sendPacketAndClose(packet);
+    }
+
+    public void writeTitle() {
+        if (clientVersion.moreOrEqual(Version.V1_17)) {
+            writePacket(PacketSnapshots.PACKET_TITLE_TITLE);
+            writePacket(PacketSnapshots.PACKET_TITLE_SUBTITLE);
+            writePacket(PacketSnapshots.PACKET_TITLE_TIMES);
+        } else {
+            writePacket(PacketSnapshots.PACKET_TITLE_LEGACY_TITLE);
+            writePacket(PacketSnapshots.PACKET_TITLE_LEGACY_SUBTITLE);
+            writePacket(PacketSnapshots.PACKET_TITLE_LEGACY_TIMES);
+        }
+    }
+
+    public void sendKeepAlive() {
+        if (state.equals(State.PLAY)) {
+            PacketKeepAlive keepAlive = new PacketKeepAlive();
+            keepAlive.setId(ThreadLocalRandom.current().nextLong());
+            sendPacket(keepAlive);
+        }
+    }
+
+    public void sendPacket(@NonNull Object packet) {
+        if (isConnected()) {
+            channel.writeAndFlush(packet, channel.voidPromise());
+        }
+    }
+
+    public void sendPacketAndClose(@NonNull Object packet) {
+        if (isConnected()) {
+            channel.writeAndFlush(packet).addListener(ChannelFutureListener.CLOSE);
+        }
+    }
+
+    public void writePacket(@NonNull Object packet) {
+        if (isConnected()) {
+            channel.write(packet, channel.voidPromise());
+        }
+    }
+
+    public boolean isConnected() {
+        return channel.isActive();
+    }
+
+    public void updateState(@NonNull State state) {
+        this.state = state;
+        decoder.updateState(state);
+        encoder.updateState(state);
+    }
+
+    public void updateEncoderState(@NonNull State state) {
+        encoder.updateState(state);
+    }
+
+    public void updateVersion(@NonNull Version version) {
+        clientVersion = version;
+        decoder.updateVersion(version);
+        encoder.updateVersion(version);
+    }
+
+    public void setAddress(@NonNull String host) {
+        this.address = new InetSocketAddress(host, ((InetSocketAddress) this.address).getPort());
+    }
+
+}

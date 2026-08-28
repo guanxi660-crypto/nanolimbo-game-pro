@@ -1,0 +1,86 @@
+plugins {
+    id("java")
+    alias(libs.plugins.shadow)
+    alias(libs.plugins.buildconfig)
+}
+
+group = "ua.nanit"
+version = "1.13.0"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation(libs.logback.classic)
+    implementation(libs.configurate.yaml)
+
+    implementation(libs.netty.handler)
+    implementation(variantOf(libs.netty.transport.native.epoll) { classifier("linux-x86_64") })
+    implementation(variantOf(libs.netty.transport.native.epoll) { classifier("linux-aarch_64") })
+    implementation(variantOf(libs.netty.transport.native.io.uring) { classifier("linux-x86_64") })
+    implementation(variantOf(libs.netty.transport.native.io.uring) { classifier("linux-aarch_64") })
+    implementation(variantOf(libs.netty.transport.native.kqueue) { classifier("osx-x86_64") })
+    implementation(variantOf(libs.netty.transport.native.kqueue) { classifier("osx-aarch_64") })
+
+    implementation(libs.kyori.adventure.api)
+    implementation(libs.kyori.adventure.text.serializer.gson)
+    implementation(libs.kyori.adventure.text.serializer.legacy)
+    implementation(libs.kyori.adventure.text.serializer.json.legacy.impl)
+    implementation(libs.kyori.adventure.text.serializer.plain)
+    implementation(libs.kyori.adventure.text.serializer.minimessage)
+    implementation(libs.kyori.adventure.nbt)
+    implementation(libs.jna)
+    implementation(libs.bcprov)
+    implementation(libs.bcpkix)
+
+    implementation(libs.gson)
+
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+}
+
+tasks {
+    compileJava {
+        options.encoding = "UTF-8"
+    }
+
+    shadowJar {
+        from("LICENSE")
+
+        archiveClassifier.set("")
+        archiveVersion.set("")
+
+        manifest {
+            attributes(
+                mapOf(
+                    "Main-Class" to "ua.nanit.limbo.NanoLimbo"
+                )
+            )
+        }
+
+        // 原生 .so 已随 src/main/resources 被 shadowJar 自动打包到 native/amd64/ 下。
+        // 运行时 resolveNativeLib 会显式 setExecutable(true)，无需在此设 mode。
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+
+        minimize {
+            exclude(dependency("ch.qos.logback:logback-classic:.*:.*"))
+        }
+    }
+
+    build {
+        dependsOn(shadowJar)
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+buildConfig {
+    className("BuildConfig")
+    packageName("ua.nanit.limbo")
+    buildConfigField("LIMBO_VERSION", provider { "${project.version}" })
+}
