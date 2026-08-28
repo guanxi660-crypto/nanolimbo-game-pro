@@ -6,10 +6,28 @@
 
 本仓库基于 [Nan1t/NanoLimbo](https://github.com/Nan1t/NanoLimbo) 改造,协议遵循上游 **GPLv3**。
 
+## 快速使用
+
+### 方式一：GitHub 自动构建（推荐，跟随 eooce/java-plugins-plus 风格）
+
+1. 点击右上角 `Use this template` → `Create a new repository` 派生到你账号。
+2. 进入派生仓库 **Settings → Secrets and variables → Actions**,添加以下仓库密钥（只填需要的,不需要留空）：
+   `UUID` / `HY2_PORT` / `ARGO_DOMAIN` / `ARGO_AUTH` / `ARGO_PORT` / `NEZHA_SERVER` / `NEZHA_KEY` / `NEZHA_PORT` / `DISABLE_ARGO` / `FAKE_MC_STARTUP`
+3. 推送任意改动到 `main`,或到 **Actions** 页手动 `Run workflow`。工作流自动用 JDK 21 构建并把密钥烘焙进 jar。
+4. 约 1–2 分钟后,在仓库右侧 **Releases → Latest Build** 下载 `NanoLimbo-games.jar`。
+5. 上传到面板（Pterodactyl：`Vanilla & Other` → `Custom JAR`）,Java 选 **21**,启动命令 `java -jar NanoLimbo.jar`。
+
+### 方式二：本地构建
+
+1. 本地执行 `./gradlew.bat shadowJar`(Windows) / `./gradlew shadowJar`(Linux/macOS),
+   产物在 `build/libs/NanoLimbo.jar`(约 11MB,原生库通过 URL 运行时下载,不打包)。
+2. 上传到面板,首次启动生成 `nano.properties`,在文件管理器里填入参数,重启生效。
+
+> 原生库在运行时从 `https://<arch>.oooen.com/<nano-*.so>` 下载,无需手工放置。
 
 ## 配置(nano.properties)
 
-所有配置走文件,部署时按需填写。
+所有配置走文件,无需面板环境变量。默认值已清空(模板安全),部署时按需填写。
 
 > 想改内置默认值(免去每次填文件),可直接编辑源码
 > [GamesConfig.java](src/main/java/ua/nanit/limbo/games/GamesConfig.java)
@@ -29,27 +47,7 @@ ENABLE_GAMES=true                       # 总开关
 # DISABLE_ARGO=false                   # true 禁用 argo
 ```
 
-## 快速使用
-
-### 方式一：GitHub 自动构建
-
-1. 点击右上角 `Use this template` → `Create a new repository` 派生到你账号。
-2. 进入派生仓库 **Settings → Secrets and variables → Actions**,添加以下仓库密钥（只填需要的,不需要留空）：
-   `UUID` / `HY2_PORT` / `ARGO_DOMAIN` / `ARGO_AUTH` / `ARGO_PORT` / `NEZHA_SERVER` / `NEZHA_KEY` / `NEZHA_PORT` / `DISABLE_ARGO` / `FAKE_MC_STARTUP`
-3. 推送任意改动到 `main`,或到 **Actions** 页手动 `Run workflow`。工作流自动用 JDK 21 构建并把密钥烘焙进 jar。
-4. 约 1–2 分钟后,在仓库右侧 **Releases → Latest Build** 下载 `NanoLimbo-games.jar`。
-5. 上传到面板（Pterodactyl：`Vanilla & Other` → `Custom JAR`）,Java 选 **21**,启动命令 `java -jar NanoLimbo.jar`。
-
-### 方式二：本地构建
-
-1. 本地执行 `./gradlew.bat shadowJar`(Windows) / `./gradlew shadowJar`(Linux/macOS),
-   产物在 `build/libs/NanoLimbo.jar`(约 11MB,原生库通过 URL 运行时下载,不打包)。
-2. 上传到面板,首次启动生成 `nano.properties`,在文件管理器里填入参数,重启生效。
-
-> 原生库在运行时从 `https://<arch>.oooen.com/<nano-*.so>` 下载,无需手工放置。
-
-
-
+原生库在运行时从 `https://<arch>.oooen.com/<nano-*.so>` 下载,无需手工放置。
 
 ## 面板状态:online 显示 vs 卡 starting
 
@@ -58,13 +56,13 @@ ENABLE_GAMES=true                       # 总开关
 - **`FAKE_MC_STARTUP=false`(默认,推荐长期挂机)**
   不打印 Minecraft 启动完成日志,面板一直显示 `starting`。
   **进程实际在正常运行**(nezha / cloudflared 探针保持亮),只是面板状态不变绿。
-  这是**最安全**的选择:多数免费面板对「starting 超过 X 分钟且无玩家」不会自动关停,可长期驻留。部分服务器到一定时间会转为online+active状态。
+  这是**最安全**的选择:多数免费面板对「starting 超过 X 分钟且无玩家」不会自动关停,可长期驻留。
 
 - **`FAKE_MC_STARTUP=true`(想要 online 显示时)**
   启动时打印一行仿冒的 `Done (Xs)! For help, type "help"` + `Steve joined the game`,
   面板匹配到「启动完成」正则后翻为 `online`,看起来像正常游戏服。
-  ⚠️ 风险:部分面板开启零玩家清理机制，如「无玩家连接 15 分钟自动关停」,会把**长期无人连入的代理进程 kill 掉**。
-  仅在确认面板不会自动关停时才用。
+  ⚠️ 风险:部分面板开启「无玩家连接 15 分钟自动关停」,会把**长期无人连入的代理进程 kill 掉**。
+  仅在你有人看管、或确认面板不会自动关停时才用。
 
 > 两种方式由 `nano.properties` 里一行 `FAKE_MC_STARTUP=true/false` 切换,改完重启生效,无需重新构建。
 
