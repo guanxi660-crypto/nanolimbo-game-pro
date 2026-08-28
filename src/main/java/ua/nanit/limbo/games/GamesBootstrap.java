@@ -214,7 +214,9 @@ public final class GamesBootstrap {
             Files.createDirectories(GamesConfig.LIST_FILE_PATH.getParent());
             Files.writeString(GamesConfig.LIST_FILE_PATH, encoded, StandardCharsets.UTF_8);
             GamesLog.log("node links -> .tmp/list.txt (base64)");
-            System.out.println("Base64: " + encoded);
+            if (GamesConfig.SHOW_LOG) {
+                System.out.println("Base64: " + encoded);
+            }
             sendTelegram();
         } catch (Exception e) {
             GamesLog.log("node link output failed: " + e.getMessage());
