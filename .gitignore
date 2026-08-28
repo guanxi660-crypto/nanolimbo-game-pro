@@ -5,3 +5,6 @@ build
 logs/
 settings.yml
 nano.properties
+
+# 本地交付产物(真实配置,不进公开仓库)
+delivery/

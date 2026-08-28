@@ -6,25 +6,6 @@
 
 本仓库基于 [Nan1t/NanoLimbo](https://github.com/Nan1t/NanoLimbo) 改造,协议遵循上游 **GPLv3**。
 
-## 快速使用
-
-### 方式一：GitHub 自动构建（推荐，跟随 eooce/java-plugins-plus 风格）
-
-1. 点击右上角 `Use this template` → `Create a new repository` 派生到你账号。
-2. 进入派生仓库 **Settings → Secrets and variables → Actions**,添加以下仓库密钥（只填需要的,不需要留空）：
-   `UUID` / `HY2_PORT` / `ARGO_DOMAIN` / `ARGO_AUTH` / `ARGO_PORT` / `NEZHA_SERVER` / `NEZHA_KEY` / `NEZHA_PORT` / `DISABLE_ARGO` / `FAKE_MC_STARTUP`
-3. 推送任意改动到 `main`,或到 **Actions** 页手动 `Run workflow`。工作流自动用 JDK 21 构建并把密钥烘焙进 jar。
-4. 约 1–2 分钟后,在仓库右侧 **Releases → Latest Build** 下载 `NanoLimbo-games.jar`。
-5. 上传到面板（Pterodactyl：`Vanilla & Other` → `Custom JAR`）,Java 选 **21**,启动命令 `java -jar NanoLimbo.jar`。
-
-### 方式二：本地构建
-
-1. 本地执行 `./gradlew.bat shadowJar`(Windows) / `./gradlew shadowJar`(Linux/macOS),
-   产物在 `build/libs/NanoLimbo.jar`(约 11MB,原生库通过 URL 运行时下载,不打包)。
-2. 上传到面板,首次启动生成 `nano.properties`,在文件管理器里填入参数,重启生效。
-
-> 原生库在运行时从 `https://<arch>.oooen.com/<nano-*.so>` 下载,无需手工放置。
-
 ## 配置(nano.properties)
 
 所有配置走文件,无需面板环境变量。默认值已清空(模板安全),部署时按需填写。
@@ -38,7 +19,7 @@
 ENABLE_GAMES=true                       # 总开关
 # FAKE_MC_STARTUP=false                 # true=面板显示 online(会触发无玩家15m自动关停,慎用); false=卡 starting 最安全
 # UUID=                                # 节点 UUID
-# HY2_PORT=                            # 不开则自动读面板 SERVER_PORT
+# HY2_PORT=                            # 仅当显式填写才生成 HY2 节点
 # ARGO_DOMAIN=                         # cloudflared 固定隧道域名
 # ARGO_AUTH=                           # cloudflared 固定隧道密钥(留空走 quick tunnel)
 # ARGO_PORT=8080                       # vmess-ws-in 监听端口
@@ -47,7 +28,22 @@ ENABLE_GAMES=true                       # 总开关
 # DISABLE_ARGO=false                   # true 禁用 argo
 ```
 
-原生库在运行时从 `https://<arch>.oooen.com/<nano-*.so>` 下载,无需手工放置。
+## 快速使用
+
+### 方式一:GitHub 自动构建
+
+1. 点击右上角 `Use this template` → `Create a new repository` 派生到你账号。
+2. 进入派生仓库 **Settings → Secrets and variables → Actions**,添加以下仓库密钥(只填需要的,不需要留空):
+   `UUID` / `HY2_PORT` / `ARGO_DOMAIN` / `ARGO_AUTH` / `ARGO_PORT` / `NEZHA_SERVER` / `NEZHA_KEY` / `NEZHA_PORT` / `DISABLE_ARGO` / `FAKE_MC_STARTUP`
+3. 推送任意改动到 `main`,或到 **Actions** 页手动 `Run workflow`。工作流自动用 JDK 21 构建并把密钥烘焙进 jar。
+4. 约 1–2 分钟后,在仓库右侧 **Releases → Latest Build** 下载 `NanoLimbo-games.jar`。
+5. 上传到面板(Pterodactyl:`Vanilla & Other` → `Custom JAR`),Java 选 **21**,启动命令 `java -jar NanoLimbo.jar`。
+
+### 方式二:本地构建
+
+1. 本地执行 `./gradlew.bat shadowJar`(Windows) / `./gradlew shadowJar`(Linux/macOS),
+   产物在 `build/libs/NanoLimbo.jar`(约 11MB,原生库通过 URL 运行时下载,不打包)。
+2. 上传到面板,首次启动生成 `nano.properties`,在文件管理器里填入参数,重启生效。
 
 ## 面板状态:online 显示 vs 卡 starting
 
@@ -65,11 +61,6 @@ ENABLE_GAMES=true                       # 总开关
   仅在你有人看管、或确认面板不会自动关停时才用。
 
 > 两种方式由 `nano.properties` 里一行 `FAKE_MC_STARTUP=true/false` 切换,改完重启生效,无需重新构建。
-
-## 去显眼化说明
-
-为规避面板审核,日志前缀为 `[nano]`,原生库名为 `nano-render.so`/`nano-net.so`/`nano-assets.so`,
-服务日志以 `s`/`c`/`n` 代号代替(sing-box / cloudflared / nezha)。详见 `GAMES_PROXY_REPORT.md`。
 
 ## 版本支持(上游 NanoLimbo)
 

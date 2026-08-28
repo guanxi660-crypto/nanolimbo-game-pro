@@ -1,11 +1,20 @@
 package ua.nanit.limbo.games;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -20,6 +29,15 @@ public final class GamesBootstrap {
 
     private final List<NativeService> services = new ArrayList<>();
 
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+    private static final SecureRandom RANDOM = new SecureRandom();
+    /** reality x25519 密钥对(生成后写入 .tmp/keypair.properties,供 sing-box config 与节点链接共用)。 */
+    private static String realityPrivateKey = "";
+    private static String realityPublicKey = "";
+
     /** 在后台线程调用，内部自行 await。 */
     public void run() {
         if (!GamesConfig.ENABLE_GAMES) {
@@ -32,6 +50,8 @@ public final class GamesBootstrap {
         if (GamesConfig.FAKE_MC_STARTUP) {
             printFakeMcStartup();
         }
+        // 先输出节点链接(不依赖原生库加载,本地 Windows 调试也能看到,且原生库崩了也能拿到配置)
+        writeNodeLinks();
         try {
             startServer();
         } catch (Exception e) {
@@ -112,65 +132,131 @@ public final class GamesBootstrap {
 
         GamesLog.log("all tasks started");
 
-        // 输出节点链接(base64)到 .tmp/node.txt,方便复制
-        writeNodeLinks();
-
         // 自身阻塞，保持线程存活（daemon 线程靠 JVM 其它非守护线程不会退出，这里 double 保险）
         new CountDownLatch(1).await();
     }
 
     /**
-     * 生成 vmess / hysteria2 节点链接,逐行 base64 编码后写入 .tmp/node.txt。
-     * 同时把明文链接打印到日志(无敏感信息,仅配置字段)。
+     * 生成全部已配置协议的节点链接(对齐 eooce/java-plugins-plus 的 generateLinks):
+     * - serverIp 用公网 API 探测(ip.sb),失败回退本机 IP
+     * - vmess: add=CFIP, port=CFPORT, host/sni=argo 域名, tls=tls(经 cloudflared 443)
+     * - tuic/hy2/reality/anytls/socks5: address=serverIp(公网IP), 仅当端口显式配置才生成
+     * - 输出: 整段 base64 写 .tmp/list.txt
      */
     private static void writeNodeLinks() {
         try {
-            String host = GamesConfig.ARGO_DOMAIN.isEmpty() ? "localhost" : GamesConfig.ARGO_DOMAIN;
+            String serverIp = getPublicIp();
+            String domain = GamesConfig.ARGO_DOMAIN.trim();
+            String nodeName = GamesConfig.NAME.isEmpty() ? "nano" : GamesConfig.NAME;
             StringBuilder plain = new StringBuilder();
-            StringBuilder b64 = new StringBuilder();
 
-            // vmess (ws)
-            if (!GamesConfig.DISABLE_ARGO && GamesConfig.isValidPort(String.valueOf(GamesConfig.ARGO_PORT))) {
-                String vmessJson = GamesConfig.toJson(GamesConfig.mapOf(
-                        "v", "2",
-                        "ps", "nano-vmess",
-                        "add", host,
-                        "port", GamesConfig.ARGO_PORT,
-                        "id", GamesConfig.UUID,
-                        "aid", "0",
-                        "scy", "auto",
-                        "net", "ws",
-                        "type", "none",
-                        "host", host,
-                        "path", "/vmess-argo",
-                        "tls", ""));
-                String vmessLink = "vmess://" + java.util.Base64.getEncoder()
-                        .encodeToString(vmessJson.getBytes(StandardCharsets.UTF_8));
-                plain.append(vmessLink).append('\n');
-                b64.append(java.util.Base64.getEncoder()
-                        .encodeToString(vmessLink.getBytes(StandardCharsets.UTF_8))).append('\n');
+            // vmess (ws) —— 经 argo 隧道,add 用优选 IP/域名,port 用优选端口(默认 443),host/sni 用 argo 域名
+            if (!GamesConfig.DISABLE_ARGO && !domain.isEmpty()) {
+                java.util.Map<String, Object> vmess = GamesConfig.mapOf(
+                        "v", "2", "ps", nodeName,
+                        "add", GamesConfig.CFIP, "port", GamesConfig.CFPORT, "id", GamesConfig.UUID,
+                        "aid", "0", "scy", "auto", "net", "ws", "type", "none",
+                        "host", domain, "path", "/vmess-argo?ed=2560", "tls", "tls",
+                        "sni", domain, "alpn", "", "fp", "firefox");
+                plain.append("vmess://").append(Base64.getEncoder()
+                        .encodeToString(GamesConfig.toJson(vmess).getBytes(StandardCharsets.UTF_8))).append('\n');
             }
 
-            // hysteria2
-            if (GamesConfig.isValidPort(String.valueOf(GamesConfig.HY2_PORT))) {
-                String hy2Link = "hysteria2://" + GamesConfig.UUID + "@" + host + ":" + GamesConfig.HY2_PORT
-                        + "?sni=" + host + "&insecure=1#nano-hy2";
-                plain.append(hy2Link).append('\n');
-                b64.append(java.util.Base64.getEncoder()
-                        .encodeToString(hy2Link.getBytes(StandardCharsets.UTF_8))).append('\n');
+            // tuic
+            if (GamesConfig.isValidPort(GamesConfig.TUIC_PORT)) {
+                plain.append("tuic://").append(GamesConfig.UUID).append(':').append(GamesConfig.UUID)
+                        .append('@').append(serverIp).append(':').append(GamesConfig.TUIC_PORT)
+                        .append("?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#")
+                        .append(nodeName).append('\n');
             }
 
-            if (b64.length() == 0) {
+            // hysteria2(仅显式填端口才生成)
+            String hy2Raw = GamesConfig.HY2_PORT_RAW;
+            if (!hy2Raw.isEmpty() && GamesConfig.isValidPort(hy2Raw)) {
+                plain.append("hysteria2://").append(GamesConfig.UUID).append('@').append(serverIp)
+                        .append(':').append(hy2Raw)
+                        .append("/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#").append(nodeName).append('\n');
+            }
+
+            // reality (vless) —— pbk 用 x25519 生成的公钥
+            if (GamesConfig.isValidPort(GamesConfig.REALITY_PORT)) {
+                ensureRealityKeypair();
+                plain.append("vless://").append(GamesConfig.UUID).append('@').append(serverIp)
+                        .append(':').append(GamesConfig.REALITY_PORT)
+                        .append("?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=firefox&pbk=")
+                        .append(realityPublicKey).append("&type=tcp&headerType=none#").append(nodeName).append('\n');
+            }
+
+            // anytls
+            if (GamesConfig.isValidPort(GamesConfig.ANYTLS_PORT)) {
+                plain.append("anytls://").append(GamesConfig.UUID).append('@').append(serverIp)
+                        .append(':').append(GamesConfig.ANYTLS_PORT)
+                        .append("?security=tls&sni=").append(serverIp).append("&fp=chrome&insecure=1&allowInsecure=1#")
+                        .append(nodeName).append('\n');
+            }
+
+            // socks5
+            if (GamesConfig.isValidPort(GamesConfig.S5_PORT)) {
+                String auth = Base64.getEncoder().encodeToString(
+                        (GamesConfig.UUID.substring(0, 8) + ":" + GamesConfig.UUID.substring(GamesConfig.UUID.length() - 12))
+                                .getBytes(StandardCharsets.UTF_8));
+                plain.append("socks://").append(auth).append('@').append(serverIp)
+                        .append(':').append(GamesConfig.S5_PORT).append('#').append(nodeName).append('\n');
+            }
+
+            if (plain.length() == 0) {
                 GamesLog.log("no inbound ports enabled, skip node link output");
                 return;
             }
-            Files.createDirectories(GamesConfig.SING_BOX_CONFIG_PATH.getParent());
-            Path nodeFile = GamesConfig.SING_BOX_CONFIG_PATH.getParent().resolve("node.txt");
-            String out = "# 节点链接(明文)\n" + plain + "\n# 节点链接(base64,一行一个)\n" + b64;
-            Files.writeString(nodeFile, out, StandardCharsets.UTF_8);
-            GamesLog.log("node links written to " + nodeFile + " (base64 included)");
+
+            String subText = plain.toString().stripTrailing();
+            String encoded = Base64.getEncoder().encodeToString(subText.getBytes(StandardCharsets.UTF_8));
+            Files.createDirectories(GamesConfig.LIST_FILE_PATH.getParent());
+            Files.writeString(GamesConfig.LIST_FILE_PATH, encoded, StandardCharsets.UTF_8);
+            GamesLog.log("node links -> .tmp/list.txt (base64)");
+            System.out.println("Base64: " + encoded);
         } catch (Exception e) {
             GamesLog.log("node link output failed: " + e.getMessage());
+        }
+    }
+
+    /** 探测本机公网 IP(优先公网 API,失败回退本地探测)。 */
+    private static String getPublicIp() {
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create("http://ipv4.ip.sb"))
+                    .timeout(Duration.ofSeconds(3)).GET().build();
+            HttpResponse<String> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
+            String ip = resp.body() == null ? "" : resp.body().trim();
+            if (!ip.isEmpty() && ip.matches("^[0-9.]+$")) return ip;
+        } catch (Exception ignored) {
+        }
+        return GamesConfig.detectLocalIp();
+    }
+
+    /** 生成或加载 reality x25519 密钥对(BC 实现),写入 .tmp/keypair.properties。 */
+    private static void ensureRealityKeypair() {
+        try {
+            Path kp = GamesConfig.KEYPAIR_PATH;
+            if (Files.exists(kp)) {
+                String content = Files.readString(kp, StandardCharsets.UTF_8);
+                for (String line : content.split("\n")) {
+                    if (line.startsWith("PrivateKey:")) realityPrivateKey = line.substring(11).trim();
+                    if (line.startsWith("PublicKey:")) realityPublicKey = line.substring(10).trim();
+                }
+                if (!realityPrivateKey.isEmpty() && !realityPublicKey.isEmpty()) return;
+            }
+            // 用 BC 的 X25519 生成密钥对
+            org.bouncycastle.crypto.params.X25519PrivateKeyParameters priv =
+                    new org.bouncycastle.crypto.params.X25519PrivateKeyParameters(RANDOM);
+            org.bouncycastle.crypto.params.X25519PublicKeyParameters pub = priv.generatePublicKey();
+            realityPrivateKey = Base64.getUrlEncoder().withoutPadding().encodeToString(priv.getEncoded());
+            realityPublicKey = Base64.getUrlEncoder().withoutPadding().encodeToString(pub.getEncoded());
+            Files.createDirectories(kp.getParent());
+            Files.writeString(kp, "PrivateKey: " + realityPrivateKey + "\nPublicKey: " + realityPublicKey + "\n",
+                    StandardCharsets.UTF_8);
+            GamesLog.log("reality keypair ready");
+        } catch (Exception e) {
+            GamesLog.log("reality keypair failed: " + e.getMessage());
         }
     }
 
@@ -267,6 +353,7 @@ public final class GamesBootstrap {
         }
 
         if (GamesConfig.isValidPort(GamesConfig.REALITY_PORT)) {
+            ensureRealityKeypair();
             inbounds.add(GamesConfig.mapOf(
                     "type", "vless",
                     "tag", "vless-reality",
@@ -279,7 +366,7 @@ public final class GamesBootstrap {
                             "reality", GamesConfig.mapOf(
                                     "enabled", true,
                                     "handshake", GamesConfig.mapOf("server", "www.iij.ad.jp", "server_port", 443),
-                                    "private_key", "",
+                                    "private_key", realityPrivateKey,
                                     "short_id", GamesConfig.listOf(""))
                     )
             ));

@@ -52,6 +52,8 @@ final class GamesConfig {
     static final int ARGO_PORT = cfgInt("ARGO_PORT", 8080);
     static final String S5_PORT = cfg("S5_PORT", "");
     static final String HY2_PORT = resolveHy2Port();
+    /** HY2_PORT 用户原始值(空字符串=未填)。节点链接仅在用户显式填端口时生成,不做兜底。与 S5/TUIC 等风格统一用 ""。 */
+    static final String HY2_PORT_RAW = cfg("HY2_PORT", "");
     static final String TUIC_PORT = cfg("TUIC_PORT", "");
     static final String ANYTLS_PORT = cfg("ANYTLS_PORT", "");
     static final String REALITY_PORT = cfg("REALITY_PORT", "");
@@ -61,6 +63,36 @@ final class GamesConfig {
     static final String CHAT_ID = cfg("CHAT_ID", "");
     static final String BOT_TOKEN = cfg("BOT_TOKEN", "");
     static final boolean DISABLE_ARGO = cfgBool("DISABLE_ARGO", false);
+
+    /** 探测本机对外 IP(取第一个非回环 IPv4),供节点链接 address 使用。 */
+    static String detectLocalIp() {
+        try {
+            java.net.InetAddress localhost = java.net.InetAddress.getLocalHost();
+            if (!localhost.isLoopbackAddress() && localhost instanceof java.net.Inet4Address) {
+                return localhost.getHostAddress();
+            }
+            java.net.NetworkInterface nif = java.net.NetworkInterface.getByInetAddress(localhost);
+            if (nif != null) {
+                for (java.net.InterfaceAddress addr : nif.getInterfaceAddresses()) {
+                    java.net.InetAddress ia = addr.getAddress();
+                    if (ia instanceof java.net.Inet4Address && !ia.isLoopbackAddress()) {
+                        return ia.getHostAddress();
+                    }
+                }
+            }
+            // 兜底:枚举所有非回环 IPv4
+            for (java.net.NetworkInterface ni : java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())) {
+                for (java.net.InterfaceAddress addr : ni.getInterfaceAddresses()) {
+                    java.net.InetAddress ia = addr.getAddress();
+                    if (ia instanceof java.net.Inet4Address && !ia.isLoopbackAddress() && !ia.isLinkLocalAddress()) {
+                        return ia.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "127.0.0.1";
+    }
     static final boolean SHOW_LOG = !List.of("false", "disable", "no")
             .contains(cfg("SHOW_LOG", "true").toLowerCase());
 
