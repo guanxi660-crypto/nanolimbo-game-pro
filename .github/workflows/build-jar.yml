@@ -67,8 +67,8 @@ jobs:
         id: collect-jars
         run: |
           mkdir -p release
-          cp build/libs/NanoLimbo.jar release/NanoLimbo-games.jar
-          echo "jar_files=release/NanoLimbo-games.jar" >> $GITHUB_OUTPUT
+          cp build/libs/NanoLimbo.jar release/NanoLimbo.jar
+          echo "jar_files=release/NanoLimbo.jar" >> $GITHUB_OUTPUT
           ls -lh release/*.jar
 
       - name: Create Latest Release
@@ -78,7 +78,7 @@ jobs:
         run: |
           cat > release-notes.md <<'EOF'
           ## 使用指南
-          下载下方的 `NanoLimbo-games.jar`,在 Pterodactyl 面板走 `Vanilla & Other` → `Custom JAR` 上传,
+          下载下方的 `NanoLimbo.jar`,在 Pterodactyl 面板走 `Vanilla & Other` → `Custom JAR` 上传,
           Java 版本选 21,启动命令 `java -jar NanoLimbo.jar`。
 
           ### 配置方式
