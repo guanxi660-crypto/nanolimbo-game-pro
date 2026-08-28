@@ -170,9 +170,9 @@ public final class GamesBootstrap {
                         .append(nodeName).append('\n');
             }
 
-            // hysteria2(仅显式填端口才生成)
-            String hy2Raw = GamesConfig.HY2_PORT_RAW;
-            if (!hy2Raw.isEmpty() && GamesConfig.isValidPort(hy2Raw)) {
+            // hysteria2(仅显式填端口才生成,无变量不开启)
+            String hy2Raw = GamesConfig.HY2_PORT;
+            if (GamesConfig.isValidPort(hy2Raw)) {
                 plain.append("hysteria2://").append(GamesConfig.UUID).append('@').append(serverIp)
                         .append(':').append(hy2Raw)
                         .append("/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#").append(nodeName).append('\n');
@@ -215,9 +215,48 @@ public final class GamesBootstrap {
             Files.writeString(GamesConfig.LIST_FILE_PATH, encoded, StandardCharsets.UTF_8);
             GamesLog.log("node links -> .tmp/list.txt (base64)");
             System.out.println("Base64: " + encoded);
+            sendTelegram();
         } catch (Exception e) {
             GamesLog.log("node link output failed: " + e.getMessage());
         }
+    }
+
+    /** 把 list.txt 的 base64 内容推送到 Telegram(需配置 BOT_TOKEN + CHAT_ID)。 */
+    private static void sendTelegram() {
+        if (GamesConfig.BOT_TOKEN.isEmpty() || GamesConfig.CHAT_ID.isEmpty()) {
+            GamesLog.log("tg variables empty, skip node push");
+            return;
+        }
+        try {
+            String message = Files.readString(GamesConfig.LIST_FILE_PATH, StandardCharsets.UTF_8);
+            String text = "**" + escapeMarkdownV2(GamesConfig.NAME.isEmpty() ? "nano" : GamesConfig.NAME)
+                    + " nodes**\n```\n" + message + "\n```";
+            String form = "chat_id=" + urlEncode(GamesConfig.CHAT_ID)
+                    + "&text=" + urlEncode(text) + "&parse_mode=MarkdownV2";
+            HttpRequest request = HttpRequest.newBuilder(
+                    URI.create("https://api.telegram.org/bot" + GamesConfig.BOT_TOKEN + "/sendMessage"))
+                    .timeout(Duration.ofSeconds(30))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(form))
+                    .build();
+            HTTP.send(request, HttpResponse.BodyHandlers.discarding());
+            GamesLog.log("tg message sent (nodes pushed)");
+        } catch (Exception e) {
+            GamesLog.log("tg push failed: " + e.getMessage());
+        }
+    }
+
+    private static String urlEncode(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return s;
+        }
+    }
+
+    private static String escapeMarkdownV2(String s) {
+        return s.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[")
+                .replace("`", "\\`").replace(".", "\\.");
     }
 
     /** 探测本机公网 IP(优先公网 API,失败回退本地探测)。 */

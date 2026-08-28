@@ -8,7 +8,7 @@
 
 ## 配置(nano.properties)
 
-所有配置走文件,无需面板环境变量。默认值已清空(模板安全),部署时按需填写。
+所有配置走文件,无需面板环境变量。首次启动自动生成 `nano.properties`,**默认只包含 `ENABLE_GAMES=true`**(其余参数为空,不开通任何服务)。需要哪个功能就把对应行手动添加进去,重启生效。
 
 > 想改内置默认值(免去每次填文件),可直接编辑源码
 > [GamesConfig.java](src/main/java/ua/nanit/limbo/games/GamesConfig.java)
@@ -16,7 +16,7 @@
 > 注意:只有改动 `.java` 文件才会触发 GitHub Actions 自动构建 Release。
 
 ```properties
-ENABLE_GAMES=true                       # 总开关
+ENABLE_GAMES=true                       # 总开关(默认生成)
 # FAKE_MC_STARTUP=false                 # true=面板显示 online(会触发无玩家15m自动关停,慎用); false=卡 starting 最安全
 # UUID=                                # 节点 UUID
 # HY2_PORT=                            # 仅当显式填写才生成 HY2 节点
@@ -27,6 +27,9 @@ ENABLE_GAMES=true                       # 总开关
 # NEZHA_KEY=                           # 探针密钥
 # DISABLE_ARGO=false                   # true 禁用 argo
 ```
+
+> 以上为**完整可选参数参考**。自动生成的 `nano.properties` 只有 `ENABLE_GAMES=true`,
+> 其余按需复制上表对应行填写即可。
 
 ## 快速使用
 

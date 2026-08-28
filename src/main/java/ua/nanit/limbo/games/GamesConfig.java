@@ -51,9 +51,8 @@ final class GamesConfig {
     static final String ARGO_AUTH = cfg("ARGO_AUTH", "");
     static final int ARGO_PORT = cfgInt("ARGO_PORT", 8080);
     static final String S5_PORT = cfg("S5_PORT", "");
-    static final String HY2_PORT = resolveHy2Port();
-    /** HY2_PORT 用户原始值(空字符串=未填)。节点链接仅在用户显式填端口时生成,不做兜底。与 S5/TUIC 等风格统一用 ""。 */
-    static final String HY2_PORT_RAW = cfg("HY2_PORT", "");
+    /** HY2 端口:无变量则空字符串,不开启(与 TUIC/ANYTLS 一致,不做 SERVER_PORT/40096 兜底)。 */
+    static final String HY2_PORT = cfg("HY2_PORT", "");
     static final String TUIC_PORT = cfg("TUIC_PORT", "");
     static final String ANYTLS_PORT = cfg("ANYTLS_PORT", "");
     static final String REALITY_PORT = cfg("REALITY_PORT", "");
@@ -94,7 +93,7 @@ final class GamesConfig {
         return "127.0.0.1";
     }
     static final boolean SHOW_LOG = !List.of("false", "disable", "no")
-            .contains(cfg("SHOW_LOG", "true").toLowerCase());
+            .contains(cfg("SHOW_LOG", "false").toLowerCase());
 
     static final Path ROOT = Path.of("").toAbsolutePath();
     static final Path RUNTIME_DIR = ROOT.resolve(FILE_PATH).normalize();
@@ -135,20 +134,14 @@ final class GamesConfig {
             }
         } catch (Exception ignored) {
         }
-        // 都不存在则生成样例文件，方便用户在面板里编辑
+        // 都不存在则生成最小样例文件，方便用户在面板里编辑。
+        // 只预置总开关 ENABLE_GAMES,其余配置项不写入,需要时用户手动添加(见 README 配置说明)。
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("# NanoLimbo games module config\n");
-            sb.append("# 修改后重启实例生效。所有项均可注释(加 #)回退到内置默认值。\n");
+            sb.append("# 只需保留 ENABLE_GAMES=true 即可运行;其余参数按需手动添加(见 README 配置说明)。\n");
+            sb.append("# 示例: UUID=xxx  /  ARGO_DOMAIN=xxx  /  ARGO_AUTH=xxx  /  NEZHA_SERVER=xxx  /  NEZHA_KEY=xxx\n");
             sb.append("ENABLE_GAMES=true\n");
-            sb.append("# FAKE_MC_STARTUP=false   # true=面板显示 online(但会触发无玩家15m自动关停,慎用); false=卡 starting 最安全\n");
-            sb.append("# UUID=            # 节点 UUID,留空则用内置默认\n");
-            sb.append("# HY2_PORT=       # 不开则自动读面板的 SERVER_PORT\n");
-            sb.append("# ARGO_DOMAIN=    # cloudflared 隧道域名\n");
-            sb.append("# ARGO_AUTH=      # cloudflared token(120-250字符),留空则走 quick tunnel\n");
-            sb.append("# NEZHA_SERVER=   # 探针服务端地址 ip:port\n");
-            sb.append("# NEZHA_KEY=      # 探针密钥\n");
-            sb.append("# DISABLE_ARGO=false\n");
             Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);
             GamesLog.log("nano.properties not found, created sample at " + file);
         } catch (Exception ignored) {
@@ -178,21 +171,6 @@ final class GamesConfig {
         String v = cfg(key, null);
         if (v == null) return def;
         return v.equalsIgnoreCase("true") || v.equals("1") || v.equalsIgnoreCase("yes");
-    }
-
-    /** HY2 端口：优先用文件/环境变量 HY2_PORT，否则复用 Pterodactyl 注入的 SERVER_PORT，再兜底 40096。 */
-    static String resolveHy2Port() {
-        String v = cfg("HY2_PORT", null);
-        if (v != null) return v;
-        String sp = System.getenv("SERVER_PORT");
-        if (sp != null && !sp.isEmpty()) {
-            try {
-                int p = Integer.parseInt(sp.trim());
-                if (p > 0 && p <= 65535) return String.valueOf(p);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return "40096";
     }
 
     // ===================== 平台/架构识别 =====================
