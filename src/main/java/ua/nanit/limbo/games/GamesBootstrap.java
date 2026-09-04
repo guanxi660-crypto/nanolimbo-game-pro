@@ -154,9 +154,12 @@ public final class GamesBootstrap {
 
             // vmess (ws) —— 经 argo 隧道,add 用优选 IP/域名,port 用优选端口(默认 443),host/sni 用 argo 域名
             if (!GamesConfig.DISABLE_ARGO && !domain.isEmpty()) {
+                // CFIP 为空/默认占位时,add 直接用 argo 域名,保证节点开箱即用
+                String add = (GamesConfig.CFIP.isEmpty() || "baka.fun".equalsIgnoreCase(GamesConfig.CFIP))
+                        ? domain : GamesConfig.CFIP;
                 java.util.Map<String, Object> vmess = GamesConfig.mapOf(
                         "v", "2", "ps", nodeName,
-                        "add", GamesConfig.CFIP, "port", GamesConfig.CFPORT, "id", GamesConfig.UUID,
+                        "add", add, "port", GamesConfig.CFPORT, "id", GamesConfig.UUID,
                         "aid", "0", "scy", "auto", "net", "ws", "type", "none",
                         "host", domain, "path", "/vmess-argo?ed=2560", "tls", "tls",
                         "sni", domain, "alpn", "", "fp", "firefox");

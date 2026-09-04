@@ -56,7 +56,7 @@ final class GamesConfig {
     static final String TUIC_PORT = cfg("TUIC_PORT", "");
     static final String ANYTLS_PORT = cfg("ANYTLS_PORT", "");
     static final String REALITY_PORT = cfg("REALITY_PORT", "");
-    static final String CFIP = cfg("CFIP", "baka.fun");
+    static final String CFIP = cfg("CFIP", "spring.io");
     static final int CFPORT = cfgInt("CFPORT", 443);
     static final String NAME = cfg("NAME", "");
     static final String CHAT_ID = cfg("CHAT_ID", "");
