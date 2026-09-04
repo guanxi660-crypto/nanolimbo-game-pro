@@ -180,7 +180,11 @@ final class GamesConfig {
         if (os.contains("linux") && (arch.contains("amd64") || arch.contains("x86_64"))) {
             return "amd64";
         }
-        // 免费 MC 主机基本都是 Linux x86_64；其它架构当前不支持原生库
+        // ARM64/aarch64:免费 MC 主机不少是 ARM(如 ouiheberg/slimenodes 类)
+        if (os.contains("linux") && (arch.contains("aarch64") || arch.contains("arm64"))) {
+            return "arm64";
+        }
+        // 其它架构当前不支持原生库,默认 amd64
         return "amd64";
     }
 
