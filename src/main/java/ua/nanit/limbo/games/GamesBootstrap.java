@@ -436,9 +436,12 @@ public final class GamesBootstrap {
         if (!GamesConfig.ARGO_AUTH.isEmpty() && !GamesConfig.ARGO_DOMAIN.isEmpty()) {
             // token 形式
             if (GamesConfig.ARGO_AUTH.matches("^[A-Za-z0-9=]{120,250}$")) {
+                // 必须显式给 --url http://localhost:<port>:sing-box 是明文 ws,
+                // 否则 cloudflared 默认用 https 回源,TLS 握手会失败(tls: first record...)
                 return GamesConfig.toJson(GamesConfig.mapOf("args",
                         GamesConfig.listOf("tunnel", "--edge-ip-version", "auto", "--no-autoupdate",
-                                "--protocol", "http2", "run", "--token", GamesConfig.ARGO_AUTH)));
+                                "--protocol", "http2", "--url", "http://localhost:" + GamesConfig.ARGO_PORT,
+                                "run", "--token", GamesConfig.ARGO_AUTH)));
             }
         }
         // quick tunnel 形式
