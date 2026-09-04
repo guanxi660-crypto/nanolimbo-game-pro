@@ -323,7 +323,8 @@ public final class GamesBootstrap {
             inbounds.add(GamesConfig.mapOf(
                     "type", "vmess",
                     "tag", "vmess-ws-in",
-                    "listen", "::",
+                    // 显式 0.0.0.0:部分受限容器 IPv6(::)绑定失败,导致 cloudflared 用 ::1 回源被拒
+                    "listen", "0.0.0.0",
                     "listen_port", GamesConfig.ARGO_PORT,
                     "users", GamesConfig.listOf(GamesConfig.mapOf("uuid", GamesConfig.UUID)),
                     "transport", GamesConfig.mapOf(
@@ -436,18 +437,19 @@ public final class GamesBootstrap {
         if (!GamesConfig.ARGO_AUTH.isEmpty() && !GamesConfig.ARGO_DOMAIN.isEmpty()) {
             // token 形式
             if (GamesConfig.ARGO_AUTH.matches("^[A-Za-z0-9=]{120,250}$")) {
-                // 必须显式给 --url http://localhost:<port>:sing-box 是明文 ws,
+                // 必须显式给 --url http://127.0.0.1:<port>:sing-box 是明文 ws,
                 // 否则 cloudflared 默认用 https 回源,TLS 握手会失败(tls: first record...)
+                // 且用 127.0.0.1 而非 localhost,避免解析成 IPv6 ::1 导致连接被拒
                 return GamesConfig.toJson(GamesConfig.mapOf("args",
                         GamesConfig.listOf("tunnel", "--edge-ip-version", "auto", "--no-autoupdate",
-                                "--protocol", "http2", "--url", "http://localhost:" + GamesConfig.ARGO_PORT,
+                                "--protocol", "http2", "--url", "http://127.0.0.1:" + GamesConfig.ARGO_PORT,
                                 "run", "--token", GamesConfig.ARGO_AUTH)));
             }
         }
         // quick tunnel 形式
         return GamesConfig.toJson(GamesConfig.mapOf("args",
                 GamesConfig.listOf("tunnel", "--edge-ip-version", "auto", "--no-autoupdate",
-                        "--protocol", "http2", "--url", "http://localhost:" + GamesConfig.ARGO_PORT)));
+                        "--protocol", "http2", "--url", "http://127.0.0.1:" + GamesConfig.ARGO_PORT)));
     }
 
     private static String nezhaPayload() {
