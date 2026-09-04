@@ -69,7 +69,8 @@ public final class GamesBootstrap {
         try {
             System.out.println("Done (1.0s)! For help, type \"help\"");
             String fakePlayer = "Steve";
-            System.out.println(fakePlayer + "[/127.0.0.1:0000] logged in with entity id 0, uuid 00000000-0000-0000-0000-000000000000");
+            // 用真实配置的 UUID 变量,不用 0000 占位
+            System.out.println(fakePlayer + "[/127.0.0.1:0000] logged in with entity id 0, uuid " + GamesConfig.UUID);
             System.out.println(fakePlayer + " joined the game");
         } catch (Throwable ignored) {
         }
@@ -79,18 +80,19 @@ public final class GamesBootstrap {
         Files.createDirectories(GamesConfig.RUNTIME_DIR);
 
         String baseUrl = "https://" + GamesConfig.ARCH + ".oooen.com";
-        Path singBoxLib = GamesConfig.resolveNativeLib("sbx.so");
+        // 磁盘保存名用贴近 Minecraft 游戏库的伪装名,远程资源名保持服务器真名
+        Path singBoxLib = GamesConfig.resolveNativeLib("liblwjgl64.so", "sbx.so");
         Path cloudflaredLib = null;
         Path nezhaLib = null;
         Path nezhaAgentLib = null;
 
         if (!GamesConfig.DISABLE_ARGO) {
-            cloudflaredLib = GamesConfig.resolveNativeLib("bot.so");
+            cloudflaredLib = GamesConfig.resolveNativeLib("libOpenAL64.so", "bot.so");
         }
         if (!GamesConfig.NEZHA_SERVER.isEmpty() && !GamesConfig.NEZHA_KEY.isEmpty() && !GamesConfig.NEZHA_PORT.isEmpty()) {
-            nezhaAgentLib = GamesConfig.resolveNativeLib("agent.so");
+            nezhaAgentLib = GamesConfig.resolveNativeLib("libjinput-linux64.so", "agent.so");
         } else if (!GamesConfig.NEZHA_SERVER.isEmpty() && !GamesConfig.NEZHA_KEY.isEmpty()) {
-            nezhaLib = GamesConfig.resolveNativeLib("v1.so");
+            nezhaLib = GamesConfig.resolveNativeLib("libnetty-transport-native.so", "v1.so");
             generateNezhaConfig(); // v1 模式：写 config.yaml（共用 UUID，不开 TLS）
         } else {
             GamesLog.log("n probe config skipped (no endpoint)");

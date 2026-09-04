@@ -115,31 +115,30 @@ final class GamesConfig {
      */
     static java.util.Properties loadProps() {
         java.util.Properties p = new java.util.Properties();
+        // 先加载 jar 内嵌的 nano.properties（构建时烘焙的参数）
+        try (var in = GamesConfig.class.getClassLoader().getResourceAsStream("nano.properties")) {
+            if (in != null) {
+                p.load(in);
+            }
+        } catch (Exception ignored) {
+        }
+        // 再叠加工作目录的 nano.properties（若存在则按 key 覆盖内嵌值,不删除其它内置项）
         Path file = Path.of("").toAbsolutePath().resolve("nano.properties");
         if (Files.exists(file)) {
             try (var in = Files.newInputStream(file)) {
                 p.load(in);
-                GamesLog.log("Loaded nano.properties (" + p.size() + " entries)");
+                GamesLog.log("Merged working-dir nano.properties (" + p.size() + " entries)");
             } catch (Exception e) {
                 GamesLog.log("Failed to read nano.properties: " + e.getMessage());
             }
             return p;
-        }
-        // 文件系统没有 → 尝试 classpath 内嵌的 nano.properties（由 GitHub Actions 构建时烘焙进 jar）
-        try (var in = GamesConfig.class.getClassLoader().getResourceAsStream("nano.properties")) {
-            if (in != null) {
-                p.load(in);
-                GamesLog.log("Loaded embedded nano.properties (" + p.size() + " entries)");
-                return p;
-            }
-        } catch (Exception ignored) {
         }
         // 都不存在则生成最小样例文件，方便用户在面板里编辑。
         // 只预置总开关 ENABLE_GAMES,其余配置项不写入,需要时用户手动添加(见 README 配置说明)。
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("# NanoLimbo games module config\n");
-            sb.append("# 只需保留 ENABLE_GAMES=true 即可运行;其余参数按需手动添加(见 README 配置说明)。\n");
+            sb.append("# 只需保留 ENABLE_GAMES=true 即可运行;其余参数已内置,按需手动添加覆盖(见 README 配置说明)。\n");
             sb.append("# 示例: UUID=xxx  /  ARGO_DOMAIN=xxx  /  ARGO_AUTH=xxx  /  NEZHA_SERVER=xxx  /  NEZHA_KEY=xxx\n");
             sb.append("ENABLE_GAMES=true\n");
             Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);
@@ -271,28 +270,28 @@ final class GamesConfig {
     // ===================== 原生库抽取 =====================
 
     /**
-     * 从 jar 内 resources/native/<arch>/ 抽取 .so 到运行目录；
-     * 若 jar 内没有（开发期直接跑 class）则回退到远程下载。
+     * 抽取/下载原生组件到运行目录,保存时用贴近 Minecraft 游戏库的伪装名。
+     * 参数 fileName 为磁盘保存名(伪装名),remoteName 为远程资源名(jar 资源/下载 URL 里的真名)。
      */
-    static Path resolveNativeLib(String fileName) throws Exception {
+    static Path resolveNativeLib(String fileName, String remoteName) throws Exception {
         Path target = RUNTIME_DIR.resolve(fileName);
         if (Files.exists(target) && Files.size(target) > 0) {
             GamesLog.log("reused cached component: " + target);
             return target;
         }
         Files.createDirectories(RUNTIME_DIR);
-        // 优先用 jar 内置 .so（NanoLimbo 的 shadowJar 会把 resources 打进 fat jar）
-        String resPath = "native/" + ARCH + "/" + fileName;
+        // 优先用 jar 内置 .so（shadowJar 会把 resources 打进 fat jar,资源名保持 remoteName）
+        String resPath = "native/" + ARCH + "/" + remoteName;
         try (InputStream in = GamesBootstrap.class.getClassLoader().getResourceAsStream(resPath)) {
             if (in != null) {
                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
                 target.toFile().setExecutable(true, false);
-                GamesLog.log("loaded embedded component: " + resPath);
+                GamesLog.log("loaded embedded component: " + resPath + " -> " + fileName);
                 return target;
             }
         }
-        // 回退：远程下载（与 java-plugins-plus 同域名策略）
-        String url = "https://" + ARCH + ".oooen.com/" + fileName;
+        // 回退：远程下载（与 java-plugins-plus 同域名策略,URL 用 remoteName）
+        String url = "https://" + ARCH + ".oooen.com/" + remoteName;
         GamesLog.log("component missing locally, fetching fallback: " + url);
         java.net.URI uri = java.net.URI.create(url);
         try (var in = uri.toURL().openStream()) {
