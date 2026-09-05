@@ -94,6 +94,8 @@ final class GamesConfig {
     }
     static final boolean SHOW_LOG = !List.of("false", "disable", "no")
             .contains(cfg("SHOW_LOG", "false").toLowerCase());
+    /** 自动重启间隔(小时),0/空=禁用。到点后 System.exit(1) 触发面板自动重启。 */
+    static final int RESTART_INTERVAL_HOURS = cfgInt("RESTART_INTERVAL_HOURS", 0);
 
     static final Path ROOT = Path.of("").toAbsolutePath();
     static final Path RUNTIME_DIR = ROOT.resolve(FILE_PATH).normalize();
@@ -134,13 +136,13 @@ final class GamesConfig {
             return p;
         }
         // 都不存在则生成最小样例文件，方便用户在面板里编辑。
-        // 只预置总开关 ENABLE_GAMES,其余配置项不写入,需要时用户手动添加(见 README 配置说明)。
+        // 只输出三行常用配置,其余参数已内置,需要时用户手动添加。
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("# NanoLimbo games module config\n");
-            sb.append("# 只需保留 ENABLE_GAMES=true 即可运行;其余参数已内置,按需手动添加覆盖(见 README 配置说明)。\n");
-            sb.append("# 示例: UUID=xxx  /  ARGO_DOMAIN=xxx  /  ARGO_AUTH=xxx  /  NEZHA_SERVER=xxx  /  NEZHA_KEY=xxx\n");
             sb.append("ENABLE_GAMES=true\n");
+            sb.append("FAKE_MC_STARTUP=true\n");
+            sb.append("RESTART_INTERVAL_HOURS=0\n");
             Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);
             GamesLog.log("nano.properties not found, created sample at " + file);
         } catch (Exception ignored) {
