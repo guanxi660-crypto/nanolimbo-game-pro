@@ -60,7 +60,7 @@ public final class GamesBootstrap {
         // 定时自动重启:到点后以非 0 退出码退出,触发面板(Pterodactyl 系)自动拉起新实例。
         // 0/空 = 禁用。用于免费面板的保活,周期刷新可规避闲置回收/内存膨胀。
         if (GamesConfig.RESTART_INTERVAL_HOURS > 0) {
-            long delayMs = GamesConfig.RESTART_INTERVAL_HOURS * 3600_000L;
+            long delayMs = (long) (GamesConfig.RESTART_INTERVAL_HOURS * 3600_000L);
             Thread t = new Thread(() -> {
                 try {
                     Thread.sleep(delayMs);
