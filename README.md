@@ -8,7 +8,7 @@
 
 ## 配置(nano.properties)
 
-所有配置走文件,无需面板环境变量。首次启动自动生成 `nano.properties`,**默认只包含 `ENABLE_GAMES=true`**(其余参数为空,不开通任何服务)。需要哪个功能就把对应行手动添加进去,重启生效。
+所有配置走文件,无需面板环境变量。首次启动自动生成 `nano.properties`,**默认包含三行**(其余参数为空,不开通任何服务)。需要哪个功能就把对应行手动添加进去,重启生效。
 
 > 想改内置默认值(免去每次填文件),可直接编辑源码
 > [GamesConfig.java](src/main/java/ua/nanit/limbo/games/GamesConfig.java)
@@ -17,7 +17,8 @@
 
 ```properties
 ENABLE_GAMES=true                       # 总开关(默认生成)
-# FAKE_MC_STARTUP=false                 # true=面板显示 online(会触发无玩家15m自动关停,慎用); false=卡 starting 最安全
+FAKE_MC_STARTUP=true                    # true=面板显示 online(会触发无玩家15m自动关停,慎用); false=卡 starting 最安全(默认生成)
+RESTART_INTERVAL_HOURS=0                # 定时自动重启间隔(小时),0/空=禁用(默认生成)
 # UUID=                                # 节点 UUID
 # HY2_PORT=                            # 仅当显式填写才生成 HY2 节点
 # ARGO_DOMAIN=                         # cloudflared 固定隧道域名
@@ -28,8 +29,20 @@ ENABLE_GAMES=true                       # 总开关(默认生成)
 # DISABLE_ARGO=false                   # true 禁用 argo
 ```
 
-> 以上为**完整可选参数参考**。自动生成的 `nano.properties` 只有 `ENABLE_GAMES=true`,
-> 其余按需复制上表对应行填写即可。
+> 以上为**完整可选参数参考**。自动生成的 `nano.properties` 只有 `ENABLE_GAMES=true`、
+> `FAKE_MC_STARTUP=true`、`RESTART_INTERVAL_HOURS=0` 三行,其余按需复制上表对应行填写即可。
+
+## 定时自动重启(保活)
+
+免费面板常对「无玩家、长时间运行」的实例做闲置回收。本模块支持进程内定时器,到点后以非 0 退出码退出,触发面板(Pterodactyl 系)自动拉起新实例,周期刷新可规避回收/内存膨胀:
+
+```properties
+RESTART_INTERVAL_HOURS=6   # 每 6 小时自动重启一次(0/留空=禁用)
+```
+
+- 重启后 jar 重新读取 `nano.properties`,配置保持,定时重启持续循环
+- 配合 `FAKE_MC_STARTUP=true` 使用最佳:重启后继续打印仿冒 `Done`,面板状态维持 online
+- 前置条件:面板需为「进程退出自动重启」模式(多数免费 MC 面板默认如此)
 
 ## 快速使用
 
@@ -50,18 +63,18 @@ ENABLE_GAMES=true                       # 总开关(默认生成)
 
 ## 面板状态:online 显示 vs 卡 starting
 
-通过 `FAKE_MC_STARTUP` 控制面板(Pterodactyl 等)把服务器识别为「在线」还是停留在「starting」:
+通过 `FAKE_MC_STARTUP` 控制面板(Pterodactyl 等)把服务器识别为「在线」还是停留在「starting」(生成的样例默认 `true`):
 
-- **`FAKE_MC_STARTUP=false`(默认,推荐长期挂机)**
+- **`FAKE_MC_STARTUP=false`(卡 starting,最安全)**
   不打印 Minecraft 启动完成日志,面板一直显示 `starting`。
   **进程实际在正常运行**(nezha / cloudflared 探针保持亮),只是面板状态不变绿。
   这是**最安全**的选择:多数免费面板对「starting 超过 X 分钟且无玩家」不会自动关停,可长期驻留。
 
-- **`FAKE_MC_STARTUP=true`(想要 online 显示时)**
+- **`FAKE_MC_STARTUP=true`(想要 online 显示时,样例默认)**
   启动时打印一行仿冒的 `Done (Xs)! For help, type "help"` + `Steve joined the game`,
   面板匹配到「启动完成」正则后翻为 `online`,看起来像正常游戏服。
   ⚠️ 风险:部分面板开启「无玩家连接 15 分钟自动关停」,会把**长期无人连入的代理进程 kill 掉**。
-  仅在你有人看管、或确认面板不会自动关停时才用。
+  配合 `RESTART_INTERVAL_HOURS` 定时重启可在被回收后自动拉起。
 
 > 两种方式由 `nano.properties` 里一行 `FAKE_MC_STARTUP=true/false` 切换,改完重启生效,无需重新构建。
 
