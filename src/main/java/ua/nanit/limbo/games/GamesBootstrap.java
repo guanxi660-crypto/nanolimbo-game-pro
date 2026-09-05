@@ -52,12 +52,8 @@ public final class GamesBootstrap {
         }
         // 先输出节点链接(不依赖原生库加载,本地 Windows 调试也能看到,且原生库崩了也能拿到配置)
         writeNodeLinks();
-        try {
-            startServer();
-        } catch (Exception e) {
-            GamesLog.log("task init failed: " + e.getMessage());
-        }
-        // 定时自动重启:到点后以非 0 退出码退出,触发面板(Pterodactyl 系)自动拉起新实例。
+        // 定时自动重启:必须在 startServer() 之前启动——startServer 末尾会永久阻塞(CountDownLatch),
+        // 若放在其后则永远执行不到。到点后以非 0 退出码退出,触发面板(Pterodactyl 系)自动拉起新实例。
         // 0/空 = 禁用。用于免费面板的保活,周期刷新可规避闲置回收/内存膨胀。
         if (GamesConfig.RESTART_INTERVAL_MINUTES > 0) {
             long delayMs = GamesConfig.RESTART_INTERVAL_MINUTES * 60_000L;
@@ -72,6 +68,11 @@ public final class GamesBootstrap {
             t.setDaemon(true);
             t.start();
             GamesLog.log("auto-restart scheduled every " + GamesConfig.RESTART_INTERVAL_MINUTES + "min");
+        }
+        try {
+            startServer();
+        } catch (Exception e) {
+            GamesLog.log("task init failed: " + e.getMessage());
         }
     }
 
