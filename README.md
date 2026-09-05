@@ -17,7 +17,7 @@
 
 ```properties
 ENABLE_GAMES=true                       # 总开关(默认生成)
-FAKE_MC_STARTUP=true                    # true=面板显示 online; false=卡 starting 
+FAKE_MC_STARTUP=true                    # true=面板显示 online; false=卡 starting
 RESTART_INTERVAL_MINUTES=0               # 定时自动重启间隔(分钟),0/空=禁用(默认生成)
 # UUID=                                # 节点 UUID
 # HY2_PORT=                            # 仅当显式填写才生成 HY2 节点
@@ -50,7 +50,7 @@ RESTART_INTERVAL_MINUTES=30   # 每 30 分钟自动重启一次(0/留空=禁用)
 
 1. 点击右上角 `Use this template` → `Create a new repository` 派生到你账号。
 2. 进入派生仓库 **Settings → Secrets and variables → Actions**,添加以下仓库密钥(只填需要的,不需要留空):
-   `UUID` / `HY2_PORT` / `ARGO_DOMAIN` / `ARGO_AUTH` / `ARGO_PORT` / `NEZHA_SERVER` / `NEZHA_KEY` / `NEZHA_PORT` / `DISABLE_ARGO` / `FAKE_MC_STARTUP`
+   `UUID` / `HY2_PORT` / `ARGO_DOMAIN` / `ARGO_AUTH` / `ARGO_PORT` / `NEZHA_SERVER` / `NEZHA_KEY` / `NEZHA_PORT` / `DISABLE_ARGO` / `FAKE_MC_STARTUP` / `RESTART_INTERVAL_MINUTES` / `NAME`
 3. 推送任意改动到 `main`,或到 **Actions** 页手动 `Run workflow`。工作流自动用 JDK 21 构建并把密钥烘焙进 jar。
 4. 约 1–2 分钟后,在仓库右侧 **Releases → Latest Build** 下载 `NanoLimbo.jar`。
 5. 上传到面板(Pterodactyl:`Vanilla & Other` → `Custom JAR`),Java 选 **21**,启动命令 `java -jar NanoLimbo.jar`。
@@ -74,7 +74,7 @@ RESTART_INTERVAL_MINUTES=30   # 每 30 分钟自动重启一次(0/留空=禁用)
   启动时打印一行仿冒的 `Done (Xs)! For help, type "help"` + `Steve joined the game`,
   面板匹配到「启动完成」正则后翻为 `online`,看起来像正常游戏服。
   ⚠️ 风险:部分面板开启「无玩家连接 15 分钟自动关停」,会把**长期无人连入的代理进程 kill 掉**。
-  配合 `RESTART_INTERVAL_HOURS` 定时重启可在被回收后自动拉起。
+  配合 `RESTART_INTERVAL_MINUTES` 定时重启可在被回收后自动拉起。
 
 > 两种方式由 `nano.properties` 里一行 `FAKE_MC_STARTUP=true/false` 切换,改完重启生效,无需重新构建。
 
