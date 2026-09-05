@@ -18,7 +18,7 @@
 ```properties
 ENABLE_GAMES=true                       # 总开关(默认生成)
 FAKE_MC_STARTUP=true                    # true=面板显示 online; false=卡 starting 
-RESTART_INTERVAL_HOURS=0                # 定时自动重启间隔(小时),0/空=禁用(默认生成)
+RESTART_INTERVAL_MINUTES=0               # 定时自动重启间隔(分钟),0/空=禁用(默认生成)
 # UUID=                                # 节点 UUID
 # HY2_PORT=                            # 仅当显式填写才生成 HY2 节点
 # ARGO_DOMAIN=                         # cloudflared 固定隧道域名
@@ -30,14 +30,14 @@ RESTART_INTERVAL_HOURS=0                # 定时自动重启间隔(小时),0/空
 ```
 
 > 以上为**完整可选参数参考**。自动生成的 `nano.properties` 只有 `ENABLE_GAMES=true`、
-> `FAKE_MC_STARTUP=true`、`RESTART_INTERVAL_HOURS=0` 三行,其余按需复制上表对应行填写即可。
+> `FAKE_MC_STARTUP=true`、`RESTART_INTERVAL_MINUTES=0` 三行,其余按需复制上表对应行填写即可。
 
 ## 定时自动重启(保活)
 
 免费面板常对「无玩家、长时间运行」的实例做闲置回收。本模块支持进程内定时器,到点后以非 0 退出码退出,触发面板(Pterodactyl 系)自动拉起新实例,周期刷新可规避回收/内存膨胀:
 
 ```properties
-RESTART_INTERVAL_HOURS=x   # 每 x 小时自动重启一次(支持小数,如 0.5=30分钟;0/留空=禁用)
+RESTART_INTERVAL_MINUTES=30   # 每 30 分钟自动重启一次(0/留空=禁用)
 ```
 
 - 重启后 jar 重新读取 `nano.properties`,配置保持,定时重启持续循环

@@ -94,8 +94,8 @@ final class GamesConfig {
     }
     static final boolean SHOW_LOG = !List.of("false", "disable", "no")
             .contains(cfg("SHOW_LOG", "false").toLowerCase());
-    /** 自动重启间隔(小时,支持小数如 0.5=30分钟),0/空=禁用。到点后 System.exit(1) 触发面板自动重启。 */
-    static final double RESTART_INTERVAL_HOURS = cfgDouble("RESTART_INTERVAL_HOURS", 0);
+    /** 自动重启间隔(分钟),0/空=禁用。到点后 System.exit(1) 触发面板自动重启。 */
+    static final int RESTART_INTERVAL_MINUTES = cfgInt("RESTART_INTERVAL_MINUTES", 0);
 
     static final Path ROOT = Path.of("").toAbsolutePath();
     static final Path RUNTIME_DIR = ROOT.resolve(FILE_PATH).normalize();
@@ -142,7 +142,7 @@ final class GamesConfig {
             sb.append("# NanoLimbo games module config\n");
             sb.append("ENABLE_GAMES=true\n");
             sb.append("FAKE_MC_STARTUP=true\n");
-            sb.append("RESTART_INTERVAL_HOURS=0\n");
+            sb.append("RESTART_INTERVAL_MINUTES=0\n");
             Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);
             GamesLog.log("nano.properties not found, created sample at " + file);
         } catch (Exception ignored) {
@@ -163,17 +163,6 @@ final class GamesConfig {
         if (v == null) return def;
         try {
             return Integer.parseInt(v.trim());
-        } catch (NumberFormatException e) {
-            return def;
-        }
-    }
-
-    /** 浮点配置:支持小数(如 RESTART_INTERVAL_HOURS=0.5 = 30 分钟),解析失败回退默认值。 */
-    static double cfgDouble(String key, double def) {
-        String v = cfg(key, null);
-        if (v == null) return def;
-        try {
-            return Double.parseDouble(v.trim());
         } catch (NumberFormatException e) {
             return def;
         }

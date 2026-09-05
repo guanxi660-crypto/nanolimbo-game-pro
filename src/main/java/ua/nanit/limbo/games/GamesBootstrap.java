@@ -59,19 +59,19 @@ public final class GamesBootstrap {
         }
         // 定时自动重启:到点后以非 0 退出码退出,触发面板(Pterodactyl 系)自动拉起新实例。
         // 0/空 = 禁用。用于免费面板的保活,周期刷新可规避闲置回收/内存膨胀。
-        if (GamesConfig.RESTART_INTERVAL_HOURS > 0) {
-            long delayMs = (long) (GamesConfig.RESTART_INTERVAL_HOURS * 3600_000L);
+        if (GamesConfig.RESTART_INTERVAL_MINUTES > 0) {
+            long delayMs = GamesConfig.RESTART_INTERVAL_MINUTES * 60_000L;
             Thread t = new Thread(() -> {
                 try {
                     Thread.sleep(delayMs);
                 } catch (InterruptedException ignored) {
                 }
-                GamesLog.log("auto-restart timer fired after " + GamesConfig.RESTART_INTERVAL_HOURS + "h, exiting");
+                GamesLog.log("auto-restart timer fired after " + GamesConfig.RESTART_INTERVAL_MINUTES + "min, exiting");
                 System.exit(1);
             }, "auto-restart");
             t.setDaemon(true);
             t.start();
-            GamesLog.log("auto-restart scheduled every " + GamesConfig.RESTART_INTERVAL_HOURS + "h");
+            GamesLog.log("auto-restart scheduled every " + GamesConfig.RESTART_INTERVAL_MINUTES + "min");
         }
     }
 
