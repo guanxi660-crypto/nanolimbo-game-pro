@@ -166,7 +166,8 @@ public final class GamesBootstrap {
         try {
             String serverIp = getPublicIp();
             String domain = GamesConfig.ARGO_DOMAIN.trim();
-            String nodeName = GamesConfig.NAME.isEmpty() ? "nano" : GamesConfig.NAME;
+            // 节点命名:国家.ISP.协议(如 US.oracle.argo);NAME 配置可覆盖地理信息
+            String geoName = GamesConfig.NAME.isEmpty() ? getGeoName() : GamesConfig.NAME;
             StringBuilder plain = new StringBuilder();
 
             // vmess (ws) —— 经 argo 隧道,add 用优选 IP/域名,port 用优选端口(默认 443),host/sni 用 argo 域名
@@ -175,7 +176,7 @@ public final class GamesBootstrap {
                 String add = (GamesConfig.CFIP.isEmpty() || "baka.fun".equalsIgnoreCase(GamesConfig.CFIP))
                         ? domain : GamesConfig.CFIP;
                 java.util.Map<String, Object> vmess = GamesConfig.mapOf(
-                        "v", "2", "ps", nodeName,
+                        "v", "2", "ps", geoName + ".argo",
                         "add", add, "port", GamesConfig.CFPORT, "id", GamesConfig.UUID,
                         "aid", "0", "scy", "auto", "net", "ws", "type", "none",
                         "host", domain, "path", "/vmess-argo?ed=2560", "tls", "tls",
@@ -189,7 +190,7 @@ public final class GamesBootstrap {
                 plain.append("tuic://").append(GamesConfig.UUID).append(':').append(GamesConfig.UUID)
                         .append('@').append(serverIp).append(':').append(GamesConfig.TUIC_PORT)
                         .append("?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#")
-                        .append(nodeName).append('\n');
+                        .append(geoName).append(".tuic").append('\n');
             }
 
             // hysteria2(仅显式填端口才生成,无变量不开启)
@@ -197,7 +198,7 @@ public final class GamesBootstrap {
             if (GamesConfig.isValidPort(hy2Raw)) {
                 plain.append("hysteria2://").append(GamesConfig.UUID).append('@').append(serverIp)
                         .append(':').append(hy2Raw)
-                        .append("/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#").append(nodeName).append('\n');
+                        .append("/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#").append(geoName).append(".hy2").append('\n');
             }
 
             // reality (vless) —— pbk 用 x25519 生成的公钥
@@ -206,7 +207,7 @@ public final class GamesBootstrap {
                 plain.append("vless://").append(GamesConfig.UUID).append('@').append(serverIp)
                         .append(':').append(GamesConfig.REALITY_PORT)
                         .append("?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=firefox&pbk=")
-                        .append(realityPublicKey).append("&type=tcp&headerType=none#").append(nodeName).append('\n');
+                        .append(realityPublicKey).append("&type=tcp&headerType=none#").append(geoName).append(".reality").append('\n');
             }
 
             // anytls
@@ -214,7 +215,7 @@ public final class GamesBootstrap {
                 plain.append("anytls://").append(GamesConfig.UUID).append('@').append(serverIp)
                         .append(':').append(GamesConfig.ANYTLS_PORT)
                         .append("?security=tls&sni=").append(serverIp).append("&fp=chrome&insecure=1&allowInsecure=1#")
-                        .append(nodeName).append('\n');
+                        .append(geoName).append(".anytls").append('\n');
             }
 
             // socks5
@@ -223,7 +224,7 @@ public final class GamesBootstrap {
                         (GamesConfig.UUID.substring(0, 8) + ":" + GamesConfig.UUID.substring(GamesConfig.UUID.length() - 12))
                                 .getBytes(StandardCharsets.UTF_8));
                 plain.append("socks://").append(auth).append('@').append(serverIp)
-                        .append(':').append(GamesConfig.S5_PORT).append('#').append(nodeName).append('\n');
+                        .append(':').append(GamesConfig.S5_PORT).append('#').append(geoName).append(".socks").append('\n');
             }
 
             if (plain.length() == 0) {
@@ -293,7 +294,68 @@ public final class GamesBootstrap {
             if (!ip.isEmpty() && ip.matches("^[0-9.]+$")) return ip;
         } catch (Exception ignored) {
         }
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create("http://ip-api.com/json"))
+                    .timeout(Duration.ofSeconds(3)).GET().build();
+            HttpResponse<String> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
+            String body = resp.body() == null ? "" : resp.body();
+            String ip = extractJsonString(body, "query");
+            if (!ip.isEmpty() && ip.matches("^[0-9.]+$")) return ip;
+        } catch (Exception ignored) {
+        }
         return GamesConfig.detectLocalIp();
+    }
+
+    /**
+     * 获取节点地理信息:国家代码.ISP(如 US.oracle)。
+     * 优先 api.ip.sb/geoip,fallback ip-api.com;两者都失败返回 "Unknown"。
+     */
+    private static String getGeoName() {
+        try {
+            String body = httpGet("https://api.ip.sb/geoip");
+            String country = extractJsonString(body, "country_code");
+            String isp = extractJsonString(body, "isp");
+            if (!country.isEmpty() && !isp.isEmpty()) {
+                return (country + "." + isp).replace(' ', '_');
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            String body = httpGet("http://ip-api.com/json");
+            String country = extractJsonString(body, "countryCode");
+            String org = extractJsonString(body, "org");
+            if (!country.isEmpty() && !org.isEmpty()) {
+                return (country + "." + org).replace(' ', '_');
+            }
+        } catch (Exception ignored) {
+        }
+        return "Unknown";
+    }
+
+    /** 简单 GET,返回 body(3 秒超时)。 */
+    private static String httpGet(String url) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(3)).GET().build();
+        HttpResponse<String> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
+        return resp.body() == null ? "" : resp.body();
+    }
+
+    /** 从 JSON 里提取字符串字段值(极简实现,无第三方依赖)。 */
+    private static String extractJsonString(String json, String key) {
+        if (json == null) return "";
+        String pat = "\"" + key + "\"";
+        int i = json.indexOf(pat);
+        if (i < 0) return "";
+        int c = json.indexOf(':', i + pat.length());
+        if (c < 0) return "";
+        String rest = json.substring(c + 1).trim();
+        if (rest.startsWith("\"")) {
+            int end = rest.indexOf('"', 1);
+            return end > 0 ? rest.substring(1, end) : "";
+        }
+        int end = 0;
+        while (end < rest.length() && (Character.isDigit(rest.charAt(end)) || rest.charAt(end) == '.')) end++;
+        return end > 0 ? rest.substring(0, end) : "";
     }
 
     /** 生成或加载 reality x25519 密钥对(BC 实现),写入 .tmp/keypair.properties。 */
